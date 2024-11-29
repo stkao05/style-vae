@@ -108,7 +108,12 @@ if __name__ == "__main__":
     train_ds = TextDataset("./tiny.txt", seq_len=args.seq_len, c2i=c2i, split="train")
     train_dl = DataLoader(train_ds, batch_size=args.batch_size)
 
-    device = torch.device("cpu")
+    if args.device == "cuda" and not torch.cuda.is_available():
+        device = torch.device("cpu")
+    else:
+        device = torch.device(args.device)
+    print("using device", device)
+
     vocab_size = len(chars)
     model = CharTransfomer(
         vocab_size,
