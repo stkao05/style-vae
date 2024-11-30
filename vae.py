@@ -118,15 +118,21 @@ def vae_loss(xh, x, mu, logvar, beta=1.0):
     x: (batch, seq)
     """
     recon_loss = F.cross_entropy(xh.view(-1, xh.size(-1)), x.view(-1), reduction="mean")
+    # KL loss normalized by batch size only
     kl_loss = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-    kl_loss /= x.size(0) * x.size(1)
+    kl_loss /= x.size(0)
     return recon_loss + beta * kl_loss, recon_loss, kl_loss
 
 
-def sample(model, device, i2c):
-    x = model.sample(1, device)  # (batch, seq, vocab)
-    tokens = x.argmax(dim=2)  # (batch, seq, vocab)
-    chars = [i2c[_.item()] for _ in tokens.flatten()]
+def sample(model, device, i2c, temperature=0.8):
+    with torch.no_grad():
+        x = model.sample(1, device)  # (batch, seq, vocab)
+        # Apply temperature
+        logits = x / temperature
+        # Sample from distribution rather than argmax
+        probs = F.softmax(logits, dim=-1)
+        tokens = torch.multinomial(probs.view(-1, probs.size(-1)), 1).view(1, -1)
+        chars = [i2c[_.item()] for _ in tokens.flatten()]
     return "".join(chars)
 
 
@@ -167,12 +173,16 @@ def main(args):
             inputs, targets = inputs.to(device), targets.to(device)
 
             xh, mu, logvar = model(inputs)
-            loss, _, _ = vae_loss(xh, targets, mu, logvar)
+            loss, r_loss, kl_loss = vae_loss(xh, targets, mu, logvar)
 
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            tq.set_postfix(loss=f"{loss.item():.4f}")
+            tq.set_postfix(
+                loss=f"{loss.item():.4f}",
+                r_loss=f"{r_loss.item():.4f}",
+                kl_loss=f"{kl_loss.item():.4f}",
+            )
 
             if step % sample_interval == 0:
                 print(sample(model, device, i2c))
