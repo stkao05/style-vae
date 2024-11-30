@@ -44,7 +44,7 @@ class CharTransfomer(nn.Module):
 
     def forward(self, x):
         _, seq_len,  = x.shape
-        causal_mask = torch.triu(torch.ones(seq_len, seq_len), diagonal=1).bool().to(x.device)
+        causal_mask = torch.tril(torch.ones(seq_len, seq_len)).bool().to(x.device)
 
         # Input shape: (batch, seq)
         x = self.embedding(x)  # (batch, seq, emb)
