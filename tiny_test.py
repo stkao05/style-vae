@@ -43,10 +43,12 @@ class CharTransfomer(nn.Module):
         self.output_layer = nn.Linear(embed_dim, vocab_size)
 
     def forward(self, x):
+        causal_mask = torch.triu(torch.ones(self.seq_len, self.seq_len), diagonal=1).bool().to(x.device)
+
         # Input shape: (batch, seq)
         x = self.embedding(x)  # (batch, seq, emb)
         x = x.permute(1, 0, 2)  # (seq, batch, emb)
-        x = self.decoder(x)  # (seq, batch, emb)
+        x = self.decoder(x, mask=causal_mask, is_causal=True)  # (seq, batch, emb)
         x = x.permute(1, 0, 2)  # Back to (batch, seq, emb)
         x = self.output_layer(x)  # (batch, seq, vocab_size)
         return x
