@@ -178,11 +178,13 @@ def main(args):
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            tq.set_postfix(
-                loss=f"{loss.item():.4f}",
-                r_loss=f"{r_loss.item():.4f}",
-                kl_loss=f"{kl_loss.item():.4f}",
-            )
+
+            if step % 25 == 0:
+                tq.set_postfix(
+                    loss=f"{loss.item():.4f}",
+                    r_loss=f"{r_loss.item():.4f}",
+                    kl_loss=f"{kl_loss.item():.4f}",
+                )
 
             if step % sample_interval == 0:
                 print(sample(model, device, i2c))
