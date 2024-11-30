@@ -195,13 +195,14 @@ def main(args):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Train a CharTransformer model.")
-    parser.add_argument("--embed_dim", type=int, default=256)
-    parser.add_argument("--num_heads", type=int, default=4)
-    parser.add_argument("--num_layers", type=int, default=4)
-    parser.add_argument("--batch_size", type=int, default=32)
-    parser.add_argument("--seq_len", type=int, default=128)
-    parser.add_argument("--num_epochs", type=int, default=32)
-    parser.add_argument("--device", type=str, default="cpu")
+    parser = argparse.ArgumentParser(description="")
+    parser.add_argument("--embed_dim", type=int)
+    parser.add_argument("--num_heads", type=int)
+    parser.add_argument("--num_layers", type=int)
+    parser.add_argument("--latent_dim", type=int)
+    parser.add_argument("--batch_size", type=int)
+    parser.add_argument("--seq_len", type=int)
+    parser.add_argument("--num_epochs", type=int)
+    parser.add_argument("--device", type=str)
     args = parser.parse_args()
     main(args)
