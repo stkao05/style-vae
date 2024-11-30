@@ -1,5 +1,6 @@
+# %%
 import argparse
-
+from dataclasses import dataclass
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -43,7 +44,10 @@ class CharTransfomer(nn.Module):
         self.output_layer = nn.Linear(embed_dim, vocab_size)
 
     def forward(self, x):
-        _, seq_len,  = x.shape
+        (
+            _,
+            seq_len,
+        ) = x.shape
         causal_mask = torch.tril(torch.ones(seq_len, seq_len)).bool().to(x.device)
 
         # Input shape: (batch, seq)
@@ -79,6 +83,52 @@ def sample_text(model, i2c, device, max_len=100, start_char_idx=None, temperatur
     return "".join(generated_text)
 
 
+def main(args):
+    with open("tiny.txt", "r", encoding="utf-8") as f:
+        data = f.read()
+
+    chars = set([_ for _ in data])
+    c2i = {c: i for i, c in enumerate(chars)}
+    i2c = {i: c for c, i in c2i.items()}
+
+    train_ds = TextDataset("./tiny.txt", seq_len=args.seq_len, c2i=c2i, split="train")
+    train_dl = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True)
+
+    if args.device == "cuda" and not torch.cuda.is_available():
+        device = torch.device("cpu")
+    else:
+        device = torch.device(args.device)
+    print("using device", device)
+
+    vocab_size = len(chars)
+    model = CharTransfomer(
+        vocab_size,
+        embed_dim=args.embed_dim,
+        num_heads=args.num_heads,
+        num_layers=args.num_layers,
+    )
+    model.to(device)
+
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters())
+    sample_interval = 250
+
+    for epoch in range(args.num_epochs):
+        tq = tqdm(train_dl, desc=f"epoch {epoch+1}/{args.num_epochs}", leave=True)
+
+        for step, (inputs, targets) in enumerate(tq):
+            inputs, targets = inputs.to(device), targets.to(device)
+            outputs = model(inputs)
+            loss = criterion(outputs.view(-1, vocab_size), targets.view(-1))
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            tq.set_postfix(loss=f"{loss.item():.4f}")
+
+            if step % sample_interval == 0:
+                tqdm.write(sample_text(model, i2c, device, max_len=100, start_char_idx=c2i['a']))
+
+
 # python tiny_test.py --embed_dim 512 --num_heads 8 --num_layers 6 --batch_size 64 --seq_len 256 --num_epochs 50 --device cuda
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train a CharTransformer model.")
@@ -101,48 +151,59 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    with open("tiny.txt", "r", encoding="utf-8") as f:
-        data = f.read()
+    main(args)
 
-    chars = set([_ for _ in data])
-    c2i = {c: i for i, c in enumerate(chars)}
-    i2c = {i: c for c, i in c2i.items()}
 
-    train_ds = TextDataset("./tiny.txt", seq_len=args.seq_len, c2i=c2i, split="train")
-    train_dl = DataLoader(train_ds, batch_size=args.batch_size)
+# @dataclass
+# class Args:
+#     embed_dim = 128
+#     num_heads = 16
+#     num_layers = 4
+#     batch_size = 32
+#     seq_len = 128
+#     num_epochs = 1
+#     device = "cpu"
 
-    if args.device == "cuda" and not torch.cuda.is_available():
-        device = torch.device("cpu")
-    else:
-        device = torch.device(args.device)
-    print("using device", device)
 
-    vocab_size = len(chars)
-    model = CharTransfomer(
-        vocab_size,
-        embed_dim=args.embed_dim,
-        num_heads=args.num_heads,
-        num_layers=args.num_layers,
-    )
-    model.to(device)
+# args = Args()
 
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters())
-    num_epochs = 1
-    sample_interval = 250
+# with open("tiny.txt", "r", encoding="utf-8") as f:
+#     data = f.read()
 
-    for epoch in range(args.num_epochs):
-        model.train()
-        tq = tqdm(train_dl, desc=f"epoch {epoch+1}/{num_epochs}", leave=True)
+# chars = set([_ for _ in data])
+# c2i = {c: i for i, c in enumerate(chars)}
+# i2c = {i: c for c, i in c2i.items()}
 
-        for step, (inputs, targets) in enumerate(tq):
-            inputs, targets = inputs.to(device), targets.to(device)
-            outputs = model(inputs)
-            loss = criterion(outputs.view(-1, vocab_size), targets.view(-1))
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            tq.set_postfix(loss=f"{loss.item():.4f}")
+# train_ds = TextDataset("./tiny.txt", seq_len=args.seq_len, c2i=c2i, split="train")
+# train_dl = DataLoader(train_ds, batch_size=args.batch_size)
 
-            if step % sample_interval == 0:
-                tqdm.write(sample_text(model, i2c, device, max_len=100))
+# if args.device == "cuda" and not torch.cuda.is_available():
+#     device = torch.device("cpu")
+# else:
+#     device = torch.device(args.device)
+# print("using device", device)
+
+# vocab_size = len(chars)
+# model = CharTransfomer(
+#     vocab_size,
+#     embed_dim=args.embed_dim,
+#     num_heads=args.num_heads,
+#     num_layers=args.num_layers,
+# )
+# model.to(device)
+
+# criterion = nn.CrossEntropyLoss()
+# optimizer = optim.Adam(model.parameters())
+# sample_interval = 250
+
+# for i in range(1024):
+#     inputs, targets = next(iter(train_dl))
+#     inputs, targets = inputs.to(device), targets.to(device)
+#     outputs = model(inputs)
+#     loss = criterion(outputs.view(-1, vocab_size), targets.view(-1))
+#     optimizer.zero_grad()
+#     loss.backward()
+#     optimizer.step()
+
+#     if i % 10 == 0:
+#         print(loss.item())
