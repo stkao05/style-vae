@@ -202,6 +202,9 @@ def main(args):
             xh, mu, logvar = model(inputs)
             loss, r_loss, kl_loss = vae_loss(xh, targets, mu, logvar, beta=args.beta)
 
+            max_norm = 1.0  # maximum norm of gradients
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
+
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
