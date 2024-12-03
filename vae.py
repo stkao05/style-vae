@@ -136,6 +136,30 @@ def sample(model, device, i2c, temperature=0.8):
     return "".join(chars)
 
 
+def save_checkpoint(model, optimizer, epoch, loss, filepath):
+    checkpoint = {
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'epoch': epoch,
+        'loss': loss
+    }
+    torch.save(checkpoint, filepath)
+    print(f"Checkpoint saved at {filepath}")
+
+
+def load_checkpoint(filepath, model, optimizer=None):
+    checkpoint = torch.load(filepath)
+    model.load_state_dict(checkpoint['model_state_dict'])
+
+    if optimizer:
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+
+    epoch = checkpoint.get('epoch', 0)
+    loss = checkpoint.get('loss', None)
+    print(f"Checkpoint loaded from {filepath} (epoch {epoch})")
+    return epoch, loss
+
+
 def main(args):
     with open("tiny.txt", "r", encoding="utf-8") as f:
         data = f.read()
@@ -163,8 +187,11 @@ def main(args):
         vocab_size=vocab_size,
     )
     model.to(device)
-    optimizer = optim.Adam(model.parameters())
+    optimizer = optim.SGD(model.parameters())
     sample_interval = 250
+
+    if args.checkpoint:
+        load_checkpoint(args.checkpoint, model, optimizer=optimizer)
 
     for epoch in range(args.num_epochs):
         tq = tqdm(train_dl, desc=f"epoch {epoch+1}/{args.num_epochs}")
@@ -173,7 +200,7 @@ def main(args):
             inputs, targets = inputs.to(device), targets.to(device)
 
             xh, mu, logvar = model(inputs)
-            loss, r_loss, kl_loss = vae_loss(xh, targets, mu, logvar)
+            loss, r_loss, kl_loss = vae_loss(xh, targets, mu, logvar, beta=args.beta)
 
             optimizer.zero_grad()
             loss.backward()
@@ -187,6 +214,7 @@ def main(args):
                 )
 
             if step % sample_interval == 0:
+                save_checkpoint(model, optimizer, epoch=epoch, loss=loss.item(), filepath="model_cp.pt")
                 print(sample(model, device, i2c))
 
 
@@ -216,5 +244,7 @@ if __name__ == "__main__":
     parser.add_argument("--seq_len", type=int)
     parser.add_argument("--num_epochs", type=int)
     parser.add_argument("--device", type=str)
+    parser.add_argument("--checkpoint", type=str)
+    parser.add_argument("--beta", type=float)
     args = parser.parse_args()
     main(args)
