@@ -35,6 +35,32 @@ class TextDataset(Dataset):
         return x, y
 
 
+class MLP(nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim):
+        super(MLP, self).__init__()
+        self.model = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(),                       
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),                        
+            nn.Linear(hidden_dim, output_dim) 
+        )
+    def forward(self, x):
+        return self.model(x)
+
+
+class MLP_1(nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim):
+        super(MLP_1, self).__init__()
+        self.model = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(),                       
+            nn.Linear(hidden_dim, output_dim),
+        )
+    def forward(self, x):
+        return self.model(x)
+
+
 class TransformerVAE(nn.Module):
     def __init__(
         self, seq_len, embed_dim, latent_dim, num_heads, num_layers, vocab_size
@@ -47,11 +73,16 @@ class TransformerVAE(nn.Module):
         self.embedding = nn.Embedding(vocab_size, embed_dim)
         encoder_layer = nn.TransformerEncoderLayer(d_model=embed_dim, nhead=num_heads)
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
-        self.enc_project = nn.Linear(embed_dim, 2 * embed_dim)
+        self.enc_project = MLP(embed_dim, embed_dim, 2 * embed_dim)
 
-        self.fc_mu = nn.Linear(embed_dim * seq_len, latent_dim)
-        self.fc_logvar = nn.Linear(embed_dim * seq_len, latent_dim)
-        self.fc_latent_to_hidden = nn.Linear(latent_dim, embed_dim * seq_len)
+        fc_in_dim = embed_dim * seq_len
+        self.fc_mu = MLP_1(fc_in_dim, fc_in_dim, latent_dim)
+        self.fc_logvar = MLP_1(fc_in_dim, fc_in_dim, latent_dim)
+        self.fc_latent_to_hidden = MLP(latent_dim, latent_dim * 2, embed_dim * seq_len)
+
+        # self.fc_mu = nn.Linear(embed_dim * seq_len, latent_dim)
+        # self.fc_logvar = nn.Linear(embed_dim * seq_len, latent_dim)
+        # self.fc_latent_to_hidden = nn.Linear(latent_dim, embed_dim * seq_len)
 
         decoder_layer = nn.TransformerEncoderLayer(d_model=embed_dim, nhead=num_heads)
         self.decoder = nn.TransformerEncoder(decoder_layer, num_layers=num_layers)
@@ -202,8 +233,7 @@ def main(args):
             xh, mu, logvar = model(inputs)
             loss, r_loss, kl_loss = vae_loss(xh, targets, mu, logvar, beta=args.beta)
 
-            max_norm = 1.0  # maximum norm of gradients
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
 
             optimizer.zero_grad()
             loss.backward()
@@ -220,22 +250,21 @@ def main(args):
                 save_checkpoint(model, optimizer, epoch=epoch, loss=loss.item(), filepath="model_cp.pt")
                 print(sample(model, device, i2c))
 
+@dataclass
+class Args:
+    device = "cpu"
+    seq_len = 32
+    beta = 1
+    embed_dim = 128
+    latent_dim = 512
+    batch_size = 2
+    num_heads = 2
+    num_layers = 2
+    num_epochs = 1
+    checkpoint = None
 
-# @dataclass
-# class Args:
-#     device = "cpu"
-#     seq_len = 32
-#     batch_size = 2
-#     embed_dim = 128
-#     latent_dim = 512
-#     num_heads = 2
-#     num_layers = 2
-#     num_epochs = 1
-
-
-# args = Args()
-# main(args)
-
+args = Args()
+main(args)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="")
